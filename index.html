@@ -56,11 +56,15 @@ const calls = {3:'TRIPLE WHAP!', 5:'MEGA SMASH!', 8:'HAMSTER STAMPEDE!'};
 const hats = ['⛑️','👑','🎩','🤠','🎀','🧢'];
 const spritePaths = Array.from({length:6}, (_, i) => 'assets/hamster-' + i + '.png?v=crop2');
 spritePaths.forEach(path => { const image = new Image(); image.src = path; });
-const encouragement = {
-  3: ['Triple WHAP!', 'Nice timing!'],
-  5: ['Mega SMASH!', 'You’re on a roll!'],
-  8: ['Here they come!', 'Hamster STAMPEDE!']
-};
+const announcerCues = new Map([
+  [3, {name:'good-smash'}],
+  [5, {name:'on-a-roll'}],
+  [8, {name:'stampede'}],
+  ['cleared', {name:'crushed-it'}]
+]);
+const voiceSources = new Set();
+let voiceEnd = 0;
+let voiceGeneration = 0;
 const gags = ['HEY!', 'CLANG!', 'PANCAKE!', 'WHEEE!', 'OOOH!', 'HAT OFF!'];
 const holes = Array.from({length:6}, (_, i) => {
   const button = document.createElement('button');
@@ -104,7 +108,21 @@ function audioOn() {
     output.connect(audio.destination);
   }
   audio.resume().catch(() => {});
-
+  loadAnnouncer();
+}
+function loadAnnouncer() {
+  for (const cue of announcerCues.values()) {
+    if (cue.clip || cue.loading) continue;
+    cue.loading = fetch('assets/announcer/' + cue.name + '.wav')
+      .then(response => {
+        if (!response.ok) throw new Error('Announcer clip unavailable');
+        return response.arrayBuffer();
+      })
+      .then(bytes => audio.decodeAudioData(bytes))
+      .then(clip => { cue.clip = clip; return clip; })
+      .catch(() => null)
+      .finally(() => { cue.loading = null; });
+  }
 }
 function tone(from, to, duration, volume, shape = 'triangle', offset = 0) {
   if (!sound || audio?.state !== 'running') return;
@@ -124,32 +142,54 @@ function banner(words, now) {
   el('call').textContent = words;
   bannerUntil = now + 1450;
 }
-function stopVoice() { window.speechSynthesis?.cancel(); }
+function stopVoice() {
+  voiceGeneration++;
+  for (const source of voiceSources) source.stop();
+  voiceSources.clear();
+  voiceEnd = duckUntil = 0;
+}
+function playAnnouncer(key, now) {
+  if (!sound) return;
+  const cue = announcerCues.get(key);
+  if (cue.clip) {
+    playVoiceClip(cue.clip, now);
+    return;
+  }
+  const generation = voiceGeneration;
+  cue.loading?.then(clip => {
+    const readyAt = performance.now();
+    if (clip && generation === voiceGeneration && readyAt - now < 1000) {
+      playVoiceClip(clip, readyAt);
+    }
+  });
+}
+function playVoiceClip(clip, now) {
+  if (!active || !sound || audio?.state !== 'running') return;
+  const start = Math.max(audio.currentTime + .075, voiceEnd + .06);
+  const wait = start - audio.currentTime;
+  if (wait > 3.2 || now + wait * 1000 >= end) return;
+  const source = audio.createBufferSource();
+  source.buffer = clip;
+  source.connect(output);
+  voiceSources.add(source);
+  source.onended = () => {
+    voiceSources.delete(source);
+    source.disconnect();
+  };
+  source.start(start);
+  voiceEnd = start + clip.duration;
+  duckUntil = now + (wait + clip.duration + .15) * 1000;
+}
 function announce(milestone, now) {
   banner(calls[milestone], now);
-  duckUntil = now + 2400;
   const fanfare = milestone === 3 ? [330,440,660] : milestone === 5 ? [220,330,440,659] : [196,262,392,523,784];
-  fanfare.forEach((note, i) => tone(note,note,.20,.18,'triangle',i*.07));
+  fanfare.forEach((note, i) => tone(note,note,.20,.10,'triangle',i*.07));
   if (milestone >= 5) {
-    noise(.5,.10,1100,.16);
-    tone(540,940,.22,.07,'sine',.19);
-    tone(840,650,.21,.05,'sine',.27);
+    noise(.5,.07,1100,.16);
+    tone(540,940,.22,.05,'sine',.19);
+    tone(840,650,.21,.04,'sine',.27);
   }
-  const speech = window.speechSynthesis;
-  if (!sound || !speech || !window.SpeechSynthesisUtterance) return;
-  stopVoice();
-  const english = speech.getVoices().filter(voice => voice.lang.startsWith('en'));
-  const voice = english.find(item => /enhanced|premium|natural/i.test(item.name) && item.localService)
-    || english.find(item => item.default && item.localService)
-    || english.find(item => item.localService);
-  encouragement[milestone].forEach((phrase,i) => {
-    const line = new SpeechSynthesisUtterance(phrase);
-    line.lang = voice?.lang || 'en-US';
-    if (voice) line.voice = voice;
-    line.pitch = i === 0 ? 1.28 : .94;
-    line.rate = i === 0 ? 1.08 : .99;
-    speech.speak(line);
-  });
+  playAnnouncer(milestone, now);
 }
 function impact(kind) {
   switch (kind) {
@@ -204,7 +244,7 @@ function fragments(hole, gag) {
 function music(now, left) {
   if (now < nextBeat) return;
   const rapid = raid || left <= 5000;
-  const volume = now < duckUntil ? .4 : 1;
+  const volume = now < duckUntil ? .23 : 1;
   const note = [262,330,392,330,294,349,440,349][beat % 8];
   tone(note,note,.13,.07*volume);
   if (beat % 2 === 0) tone(102,42,.12,.15*volume,'sine');
@@ -287,7 +327,8 @@ function tick(now) {
     if (raid.hits === 3) {
       score += 5;
       banner('Stampede cleared! +5',now);
-      [440,554,660,880].forEach((note,i) => tone(note,note,.2,.16,'triangle',i*.075));
+      [440,554,660,880].forEach((note,i) => tone(note,note,.2,.10,'triangle',i*.075));
+      playAnnouncer('cleared', now);
       jolt();
     }
     raid = null;
