@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hamster Hit!</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#19172c;color:#fff6d9;font:800 16px system-ui;text-align:center}main{width:min(100%,460px);min-height:100svh;margin:auto;padding:16px;display:flex;flex-direction:column;justify-content:center;gap:10px;background:radial-gradient(ellipse at top,#61548e,#292540 75%)}h1{margin:0;font-size:clamp(42px,12vw,64px);letter-spacing:-.075em;color:#ffda59;text-shadow:0 4px #a7454a;transform:rotate(-3deg)}h1 span{color:#ff9671}p{margin:0}button{font:inherit;cursor:pointer;touch-action:manipulation}button:focus-visible{outline:3px solid white;outline-offset:2px}.hud{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.hud div{background:#211e37;border:1px solid #8574a1;border-radius:12px;padding:5px;font-size:11px;letter-spacing:.08em}.hud b{display:block;font-size:25px;font-variant-numeric:tabular-nums}.arena{position:relative}.board{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;border:7px solid #b56d42;border-radius:22px;padding:8px;background:repeating-linear-gradient(-30deg,#fff0 0 13px,#fff2 13px 15px),#efaa61;box-shadow:0 5px #653e38}.hole{height:clamp(68px,15svh,112px);position:relative;overflow:hidden;border:0;border-radius:12px;background:#f9d08855;user-select:none;-webkit-tap-highlight-color:transparent}.rim{position:absolute;inset:auto 8% 6%;height:34%;background:#402637;border:5px solid #b36a47;border-radius:50%;box-shadow:inset 0 5px #2b1e31}.ready .rim{border-color:#fff476;box-shadow:0 0 15px #fff7b1}.ham{position:absolute;bottom:14%;left:50%;width:clamp(53px,20vw,82px);height:70%;transform:translate(-50%,120%);transition:transform .11s;pointer-events:none}.up .ham,.hit .ham{transform:translate(-50%)}.face{position:absolute;inset:15% 0 0;border-radius:47%;border:3px solid #773f37;background:radial-gradient(ellipse at 50% 75%,#fff0bb 0 37%,transparent 39%),linear-gradient(#de8a4b,#ffc26e);box-shadow:inset 0 -4px #a7533733}.ears{position:absolute;inset:7% 2% auto;height:29%;display:flex;justify-content:space-between}.ears i{width:28%;border:3px solid #773f37;background:#ff9f91;border-radius:50%}.eyes{position:absolute;inset:34% 15% auto;display:flex;justify-content:space-between}.eyes i{width:15%;aspect-ratio:1;background:#362337;border-radius:50%;box-shadow:inset 2px 2px #fff8}.nose{position:absolute;left:44%;top:54%;width:12%;height:10%;border-radius:50%;background:#933e53}.helmet{position:absolute;inset:0 12% auto;height:33%;display:grid;place-items:center;line-height:1;color:#fff5ba;font-size:12px;border:3px solid #3c5249;border-radius:50% 50% 25% 25%;background:#93cb92;box-shadow:inset 0 -4px #599e72}.gag{position:absolute;inset:4% 1% auto;color:#fff8ca;text-shadow:0 2px #702d43,1px 0 #702d43,-1px 0 #702d43;pointer-events:none}.hit .ham{animation:whap .48s both}.hit .gag{animation:gag .48s both}.hit[data-gag="0"] .nose{width:22%;left:39%;height:19%}.hit[data-gag="1"] .helmet{transform:rotate(55deg) translateX(8px)}.hit[data-gag="2"] .face{transform:scale(1.25,.66)}.hit[data-gag="3"] .ham{animation:spin .48s both}.hit[data-gag="4"] .eyes i{background:#dc3878;transform:scale(1.6)}.hit[data-gag="5"] .helmet{transform:translateY(-18px) rotate(-28deg)}
+@keyframes whap{24%{transform:translate(-50%,4%) scale(1.16,.75) rotate(-12deg)}60%{transform:translate(-50%,-3%) rotate(9deg)}to{transform:translate(-50%,120%)}}@keyframes spin{55%{transform:translate(-50%,-5%) rotate(270deg)}to{transform:translate(-50%,120%) rotate(360deg)}}@keyframes gag{25%{transform:scale(1.14) rotate(-6deg)}to{opacity:0}}@keyframes shake{25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}.shake{animation:shake .22s}
+.panel{position:absolute;inset:7px;border-radius:16px;display:grid;place-content:center;justify-items:center;gap:12px;background:#262138ed;padding:14px}.panel[hidden]{display:none}h2{margin:0;color:#ffdb59;font-size:clamp(25px,7vw,36px)}.play{background:#ffdb59;color:#382549;border:0;border-radius:12px;padding:11px 24px;box-shadow:0 5px #bc733c}.call{height:26px;color:#ffdb59;font-size:18px}.settings button{border:1px solid #8473a3;border-radius:8px;background:#28223d;color:#fff2dc;padding:6px 10px;font-size:12px}@media(prefers-reduced-motion:reduce){.shake,.hit .ham,.hit .gag{animation:none!important}.ham{transition:none}}
+</style>
+<main>
+<h1>Hamster <span>Hit!</span></h1>
+<p>The toy-box showdown</p>
+<div class="hud"><div>SCORE<b id="score">0</b></div><div>TIME<b id="clock">30</b></div><div>STREAK<b id="streak">0</b></div></div>
+<section class="arena" aria-label="Hamster arena">
+<div class="board" id="board" inert></div>
+<div class="panel" id="panel"><h2 id="headline">Ready to whap?</h2><p id="message">Tap the hamsters as they pop up.</p><button class="play" id="play">Play</button></div>
+</section>
+<p class="call" id="call" aria-live="polite">Six holes. Thirty seconds.</p>
+<div class="settings"><button id="sound">Sound on</button> <button id="motion">Shake on</button></div>
+</main>
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+const board = el('board');
+const calls = {3:'TRIPLE WHAP!', 5:'MEGA SMASH!', 8:'HAMSTER STAMPEDE!'};
+const gags = ['HEY!', 'CLANG!', 'PANCAKE!', 'WHEEE!', 'OOOH!', 'HAT OFF!'];
+const holes = Array.from({length:6}, (_, i) => {
+  const button = document.createElement('button');
+  button.setAttribute('aria-label', 'Hole ' + (i + 1));
+  button.innerHTML = '<span class="rim"></span><span class="ham"><span class="ears"><i></i><i></i></span><span class="face"><span class="eyes"><i></i><i></i></span><span class="nose"></span></span><span class="helmet">★</span></span><span class="gag" aria-hidden="true"></span>';
+  const hole = {button, gag:button.querySelector('.gag')};
+  button.onclick = () => hit(hole);
+  board.append(button);
+  setHole(hole, 'empty');
+  return hole;
+});
+let sound = true;
+let motion = !matchMedia('(prefers-reduced-motion:reduce)').matches;
+let audio, output, end, nextSpawn, nextBeat, beat, score, streak, best;
+let active = false;
+let last, lastGag, bag, raid, usedRaid, bannerUntil, duckUntil;
+function settings() {
+  for (const [id, name, enabled] of [['sound','Sound',sound],['motion','Shake',motion]]) {
+    el(id).textContent = name + (enabled ? ' on' : ' off');
+    el(id).setAttribute('aria-pressed', enabled);
+  }
+}
+settings();
+el('sound').onclick = () => {
+  sound = !sound;
+  if (sound) audioOn();
+  if (output) output.gain.value = sound ? .55 : 0;
+  if (!sound) window.speechSynthesis?.cancel();
+  settings();
+};
+el('motion').onclick = () => { motion = !motion; settings(); };
+function audioOn() {
+  if (!sound) return;
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) return;
+  if (!audio) {
+    audio = new Context();
+    output = audio.createGain();
+    output.gain.value = .55;
+    output.connect(audio.destination);
+  }
+  audio.resume().catch(() => {});
+}
+function tone(from, to, duration, volume, shape = 'triangle', offset = 0) {
+  if (!sound || audio?.state !== 'running') return;
+  const time = audio.currentTime + offset;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = shape;
+  osc.frequency.setValueAtTime(from, time);
+  osc.frequency.exponentialRampToValueAtTime(to, time + duration);
+  gain.gain.setValueAtTime(volume, time);
+  gain.gain.exponentialRampToValueAtTime(.001, time + duration);
+  osc.connect(gain).connect(output);
+  osc.start(time);
+  osc.stop(time + duration);
+}
+function banner(words, now) {
+  el('call').textContent = words;
+  bannerUntil = now + 1450;
+}
+function announce(words, now) {
+  banner(words, now);
+  duckUntil = bannerUntil;
+  [330,440,660].forEach((note, i) => tone(note,note,.15,.15,'triangle',i*.075));
+  if (sound && window.speechSynthesis && window.SpeechSynthesisUtterance) {
+    const line = new SpeechSynthesisUtterance(words);
+    line.pitch = .8;
+    line.rate = 1.12;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(line);
+  }
+}
+function music(now, left) {
+  if (now < nextBeat) return;
+  const rapid = raid || left <= 5000;
+  const volume = now < duckUntil ? .4 : 1;
+  const note = [262,330,392,330,294,349,440,349][beat % 8];
+  tone(note,note,.13,.07*volume);
+  if (beat % 2 === 0) tone(102,42,.12,.15*volume,'sine');
+  if (rapid || streak >= 5) tone(note/2,note/2,.14,.08*volume);
+  if (rapid) tone(790,230,.05,.045*volume,'square');
+  beat++;
+  nextBeat = now + (rapid ? 142 : 220);
+}
+function setHole(hole, state, until = 0, bonus = false) {
+  Object.assign(hole, {state, until, bonus});
+  hole.button.className = 'hole ' + state;
+  hole.button.setAttribute('aria-disabled', state !== 'up');
+  hole.gag.textContent = '';
+}
+function choose(array) { return array[Math.floor(Math.random()*array.length)]; }
+function jolt() {
+  if (!motion) return;
+  board.classList.remove('shake');
+  void board.offsetWidth;
+  board.classList.add('shake');
+}
+function hud(now) {
+  const values = {score, streak, clock:Math.max(0, Math.ceil((end-now)/1000))};
+  for (const [id, value] of Object.entries(values)) {
+    if (el(id).textContent !== String(value)) el(id).textContent = value;
+  }
+}
+function hit(hole) {
+  const now = performance.now();
+  if (!active || now >= end) return;
+  if (hole.state !== 'up' || now >= hole.until) {
+    if (hole.state === 'empty') tone(100,65,.08,.08,'sine');
+    return;
+  }
+  if (hole.bonus) { score += 2; raid.hits++; } else score++;
+  setHole(hole,'hit',now+480);
+  if (!bag.length) bag = gags.map((_,index) => index);
+  lastGag = choose(bag.filter(index => index !== lastGag));
+  bag.splice(bag.indexOf(lastGag),1);
+  hole.button.dataset.gag = lastGag;
+  hole.gag.textContent = gags[lastGag];
+  tone(170,42,.12,.5);
+  tone(820,96,.07,.24,'sawtooth');
+  tone(390+lastGag*38,180,.15,.12,'square',.05);
+  streak++;
+  best = Math.max(best,streak);
+  if (streak === 3 || streak === 5) announce(calls[streak],now);
+  if (streak === 5) jolt();
+  if (streak >= 8 && !usedRaid && end-now >= 2400) {
+    usedRaid = true;
+    raid = {go:now+360,hits:0};
+    const available = holes.filter(item => item.state === 'empty');
+    for (let i=0;i<3;i++) {
+      const target = choose(available);
+      available.splice(available.indexOf(target),1);
+      setHole(target,'ready',raid.go,true);
+    }
+    announce(calls[8],now);
+    jolt();
+  }
+  hud(now);
+}
+function tick(now) {
+  if (now >= end) { finish(now); return; }
+  for (const hole of holes) {
+    if (now < hole.until) continue;
+    if (hole.state === 'ready') setHole(hole,'up',now+1400,true);
+    else if (hole.state !== 'empty') {
+      if (hole.state === 'up') streak = 0;
+      setHole(hole,'empty');
+    }
+  }
+  if (raid && !holes.some(hole => hole.bonus)) {
+    if (raid.hits === 3) {
+      score += 5;
+      banner('Stampede cleared! +5',now);
+      [440,554,660,880].forEach((note,i) => tone(note,note,.2,.16,'triangle',i*.075));
+      jolt();
+    }
+    raid = null;
+    nextSpawn = now + 250;
+  }
+  if (!raid && now >= nextSpawn) {
+    const available = holes.filter(hole => hole.state === 'empty' && hole !== last);
+    if (available.length) {
+      const progress = (now-(end-30000))/30000;
+      last = choose(available);
+      setHole(last,'up',now+1620-840*progress);
+      nextSpawn = now+1000-480*progress;
+    }
+  }
+  const left = end-now;
+  const prompt = left <= 5000 ? 'Final flurry!' : 'Tap the pop-ups!';
+  if (now >= bannerUntil && el('call').textContent !== prompt) el('call').textContent = prompt;
+  music(now,left);
+  hud(now);
+  requestAnimationFrame(tick);
+}
+function finish(now) {
+  active = false;
+  board.inert = true;
+  holes.forEach(hole => setHole(hole,'empty'));
+  window.speechSynthesis?.cancel();
+  hud(now);
+  el('headline').textContent = 'Round complete!';
+  el('message').textContent = score + ' points · Best streak ' + best;
+  el('call').textContent = 'Time!';
+  el('play').textContent = 'Play again';
+  el('panel').hidden = false;
+  el('play').focus({preventScroll:true});
+}
+el('play').onclick = () => {
+  if (active) return;
+  audioOn();
+  const now = performance.now();
+  active = true;
+  score = streak = best = beat = duckUntil = 0;
+  last = raid = null;
+  lastGag = -1;
+  bag = [];
+  usedRaid = false;
+  end = now+30000;
+  nextSpawn = now+300;
+  nextBeat = now;
+  el('panel').hidden = true;
+  board.inert = false;
+  banner('Go!',now);
+  hud(now);
+  requestAnimationFrame(tick);
+};
+</script>
+</html>
