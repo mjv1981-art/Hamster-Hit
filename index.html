@@ -87,8 +87,46 @@ html:-webkit-full-screen main{width:100%;max-width:820px}
   .hole{height:clamp(44px,calc((100dvh - 199px - env(safe-area-inset-top) - env(safe-area-inset-bottom))/2),170px)}.call{font-size:15px;height:20px}.panel{gap:6px}
 }
 @media(prefers-reduced-motion:reduce){.up .ham,.fx i,.fx::before,.hit .daze,.hit .hat{animation:none!important}.fx i,.fx::before{display:none}}
+#retro-start {
+  position:fixed; inset:0; z-index:20; display:grid; place-items:center;
+  padding:clamp(15px,8vmin,68px); overflow:auto; background:
+    repeating-linear-gradient(0deg,#d73258 0 6px,#e9ce4b 6px 12px,#5dcca4 12px 18px,
+    #50d1dd 18px 24px,#4b61bd 24px 30px,#d452c1 30px 36px,#e6e1e6 36px 42px,#171424 42px 50px);
+}
+#retro-start[hidden] { display:none }
+.retro-card {
+  width:min(680px,100%); min-height:min(64dvh,440px); padding:clamp(12px,4vmin,36px);
+  display:grid; justify-items:center; align-content:center; gap:clamp(8px,2.5vmin,18px);
+  background:#0c0911; box-shadow:0 0 42px #000b; border:1px solid #ffffff50;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+}
+.retro-brand {
+  color:#ffef63; font-size:clamp(22px,7vmin,56px); font-weight:900; letter-spacing:.14em;
+  text-shadow:2px 2px #f24bc7,4px 4px #06bed2;
+}
+.retro-title { color:#d7ffd3; font-size:clamp(15px,3.5vmin,27px) }
+.retro-bars {
+  width:min(100%,420px); height:clamp(9px,3vmin,24px); border:1px solid #63ff8399;
+  background:repeating-linear-gradient(90deg,#64f88c 0 9px,#0b2317 9px 18px);
+}
+#start-tape {
+  color:#f0ffed; background:#17261d; border:1px solid #63ff8399;
+  border-radius:3px; padding:8px 14px; min-height:42px;
+}
+#start-tape[aria-disabled="true"] { cursor:progress }
+#retro-start.loading .retro-bars { animation:tape-scroll .42s linear infinite }
+@keyframes tape-scroll { to { background-position:36px 0 } }
+@media(prefers-reduced-motion:reduce) { #retro-start.loading .retro-bars { animation:none } }
 </style>
-<main>
+<section id="retro-start" aria-labelledby="retro-brand">
+  <div class="retro-card">
+    <div class="retro-brand" id="retro-brand">RETRO WAVES</div>
+    <p class="retro-title">HAMSTER HIT!</p>
+    <div class="retro-bars" aria-hidden="true"></div>
+    <button id="start-tape" type="button">Start tape</button>
+  </div>
+</section>
+<main inert>
 <h1>Hamster <span>Hit!</span></h1>
 <p>The toy-box showdown</p>
 <div class="hud"><div>SCORE<b id="score">0</b></div><div>TIME<b id="clock">30</b></div><div>STREAK<b id="streak">0</b></div></div>
@@ -110,12 +148,10 @@ const hats = ['⛑️','👑','🎩','🤠','🎀','🧢'];
 const spritePaths = Array.from({length:3}, (_, i) => 'assets/hamster-' + i + '.png?v=crop2');
 const knockoutSprites = Array.from({length:3}, (_, i) => 'assets/knockout-' + i + '.png');
 [...spritePaths, ...knockoutSprites].forEach(path => { const image = new Image(); image.src = path; });
-const announcerCues = new Map([
-  [3, {name:'good-smash'}],
-  [5, {name:'on-a-roll'}],
-  [8, {name:'stampede'}],
-  ['cleared', {name:'crushed-it'}]
-]);
+const hypeCues = ['good-smash','on-a-roll','what-a-hit','keep-it-up','unstoppable','crowd-goes-wild','the-champ'];
+const announcerCues = new Map([...hypeCues,'stampede','crushed-it'].map(name => [name, {}]));
+let hypeBag = [];
+let lastHype;
 const voiceSources = new Set();
 let voiceEnd = 0;
 let voiceGeneration = 0;
@@ -134,7 +170,8 @@ const holes = Array.from({length:6}, (_, i) => {
 });
 let sound = true;
 let motion = !matchMedia('(prefers-reduced-motion:reduce)').matches;
-let audio, output, end, nextSpawn, nextBeat, beat, score, streak, best;
+let audio, output, voiceGain, crowdGain, crowdClip, crowdLoading, crowdSource;
+let end, nextSpawn, nextBeat, beat, score, streak, best;
 let active = false;
 let last, lastGag, lastImpact, bag, raid, usedRaid, bannerUntil, duckUntil;
 function settings() {
@@ -148,7 +185,10 @@ el('sound').onclick = () => {
   sound = !sound;
   if (sound) audioOn();
   if (output) output.gain.value = sound ? .55 : 0;
-  if (!sound) stopVoice();
+  if (!sound) {
+    stopVoice();
+    stopCrowd();
+  }
   settings();
 };
 el('motion').onclick = () => {
@@ -165,14 +205,59 @@ function audioOn() {
     output = audio.createGain();
     output.gain.value = .55;
     output.connect(audio.destination);
+    voiceGain = audio.createGain();
+    voiceGain.gain.value = .56;
+    voiceGain.connect(output);
+    crowdGain = audio.createGain();
+    crowdGain.connect(output);
   }
-  audio.resume().catch(() => {});
+  const resumed = audio.resume().then(startCrowd).catch(() => {});
   loadAnnouncer();
+  loadCrowd();
+  return resumed;
+}
+function loadCrowd() {
+  if (crowdClip || crowdLoading) return;
+  // AF Crowd Cheer Loop by mglennsound, CC0 (freesound.org/s/678545).
+  crowdLoading = fetch('assets/audio/arena-crowd.mp3')
+    .then(response => {
+      if (!response.ok) throw new Error('Crowd track unavailable');
+      return response.arrayBuffer();
+    })
+    .then(bytes => audio.decodeAudioData(bytes))
+    .then(clip => { crowdClip = clip; startCrowd(); })
+    .catch(() => {})
+    .finally(() => { crowdLoading = null; });
+}
+function startCrowd() {
+  if (!active || !sound || !crowdClip || crowdSource || audio.state !== 'running') return;
+  const source = audio.createBufferSource();
+  source.buffer = crowdClip;
+  source.loop = true;
+  crowdGain.gain.cancelScheduledValues(audio.currentTime);
+  crowdGain.gain.setValueAtTime(0,audio.currentTime);
+  crowdGain.gain.setTargetAtTime(.18,audio.currentTime,.21);
+  source.connect(crowdGain);
+  source.start();
+  crowdSource = source;
+}
+function cheer(level) {
+  if (!crowdSource) return;
+  const time = audio.currentTime;
+  crowdGain.gain.cancelScheduledValues(time);
+  crowdGain.gain.setTargetAtTime(level,time,.09);
+  crowdGain.gain.setTargetAtTime(.18,time+.62,.28);
+}
+function stopCrowd() {
+  if (!crowdSource) return;
+  crowdSource.stop();
+  crowdSource.disconnect();
+  crowdSource = null;
 }
 function loadAnnouncer() {
-  for (const cue of announcerCues.values()) {
+  for (const [name,cue] of announcerCues) {
     if (cue.clip || cue.loading) continue;
-    cue.loading = fetch('assets/announcer/' + cue.name + '.wav')
+    cue.loading = fetch('assets/announcer/' + name + '.wav')
       .then(response => {
         if (!response.ok) throw new Error('Announcer clip unavailable');
         return response.arrayBuffer();
@@ -229,7 +314,7 @@ function playVoiceClip(clip, now) {
   if (wait > 3.2 || now + wait * 1000 >= end) return;
   const source = audio.createBufferSource();
   source.buffer = clip;
-  source.connect(output);
+  source.connect(voiceGain);
   voiceSources.add(source);
   source.onended = () => {
     voiceSources.delete(source);
@@ -243,12 +328,15 @@ function announce(milestone, now) {
   banner(calls[milestone], now);
   const fanfare = milestone === 3 ? [330,440,660] : milestone === 5 ? [220,330,440,659] : [196,262,392,523,784];
   fanfare.forEach((note, i) => tone(note,note,.20,.10,'triangle',i*.07));
-  if (milestone >= 5) {
-    noise(.5,.07,1100,.16);
-    tone(540,940,.22,.05,'sine',.19);
-    tone(840,650,.21,.04,'sine',.27);
-  }
-  playAnnouncer(milestone, now);
+  cheer(milestone === 8 ? .37 : .28);
+  playAnnouncer(milestone === 8 ? 'stampede' : nextHypeCue(), now);
+}
+function nextHypeCue() {
+  if (!hypeBag.length) hypeBag = [...hypeCues];
+  const cue = choose(hypeBag.filter(name => name !== lastHype));
+  hypeBag.splice(hypeBag.indexOf(cue),1);
+  lastHype = cue;
+  return cue;
 }
 function impact(kind) {
   switch (kind) {
@@ -310,7 +398,7 @@ function fragments(hole) {
 function music(now, left) {
   if (now < nextBeat) return;
   const rapid = raid || left <= 5000;
-  const volume = now < duckUntil ? .23 : 1;
+  const volume = now < duckUntil ? .84 : 1;
   const note = [262,330,392,330,294,349,440,349][beat % 8];
   tone(note,note,.13,.07*volume);
   if (beat % 2 === 0) tone(102,42,.12,.15*volume,'sine');
@@ -393,7 +481,8 @@ function tick(now) {
       score += 5;
       banner('Stampede cleared! +5',now);
       [440,554,660,880].forEach((note,i) => tone(note,note,.2,.10,'triangle',i*.075));
-      playAnnouncer('cleared', now);
+      cheer(.39);
+      playAnnouncer('crushed-it', now);
       jolt();
     }
     raid = null;
@@ -420,6 +509,7 @@ function finish(now) {
   board.inert = true;
   holes.forEach(hole => setHole(hole,'empty'));
   stopVoice();
+  stopCrowd();
   hud(now);
   el('headline').textContent = 'Round complete!';
   el('message').textContent = score + ' points · Best streak ' + best;
@@ -457,11 +547,30 @@ screen.onclick = async () => {
   }
 };
 syncFullscreen();
+const tapeButton = el('start-tape');
+tapeButton.onclick = () => {
+  if (tapeButton.getAttribute('aria-disabled') === 'true') return;
+  tapeButton.setAttribute('aria-disabled','true');
+  tapeButton.textContent = 'Loading…';
+  el('retro-start').classList.add('loading');
+  audioOn()?.then(() => {
+    if (el('retro-start').hidden) return;
+    noise(.19,.08,1750);
+    tone(1450,1480,.34,.09,'square',.13);
+    [1850,1380,2030,1530].forEach((note,i) => tone(note,note,.095,.065,'square',.47+i*.105));
+    tone(880,1760,.18,.07,'triangle',.97);
+  });
+  setTimeout(() => {
+    el('retro-start').hidden = true;
+    gameScreen.inert = false;
+    el('play').focus({preventScroll:true});
+  },1350);
+};
 el('play').onclick = () => {
   if (active) return;
-  audioOn();
   const now = performance.now();
   active = true;
+  audioOn();
   score = streak = best = beat = duckUntil = 0;
   last = raid = null;
   lastGag = lastImpact = -1;
