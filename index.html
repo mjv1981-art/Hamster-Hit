@@ -7,6 +7,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#19172c">
 <title>Hamster Hit!</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Hamster Hit!">
+<meta property="og:description" content="Tap the hamsters as they pop up, build a streak, and chase your high score in this Retro Waves arcade game.">
+<meta property="og:url" content="https://mjv1981-art.github.io/Hamster-Hit/">
+<meta property="og:image" content="https://mjv1981-art.github.io/App-Portal/assets/covers/hamster-hit.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="450">
+<meta property="og:image:alt" content="Pixel-art hamster popping out of an arcade game board.">
 <style>
 *{box-sizing:border-box}body{margin:0;background:#19172c;color:#fff6d9;font:800 16px system-ui;text-align:center}main{width:min(100%,460px);min-height:100svh;margin:auto;padding:16px;display:flex;flex-direction:column;justify-content:center;gap:10px;background:radial-gradient(ellipse at top,#61548e,#292540 75%)}h1{margin:0;font-size:clamp(42px,12vw,64px);letter-spacing:-.075em;color:#ffda59;text-shadow:0 4px #a7454a;transform:rotate(-3deg)}h1 span{color:#ff9671}p{margin:0}button{font:inherit;cursor:pointer;touch-action:manipulation}button:focus-visible{outline:3px solid white;outline-offset:2px}.hud{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.hud div{background:#211e37;border:1px solid #8574a1;border-radius:12px;padding:5px;font-size:11px;letter-spacing:.08em}.hud b{display:block;font-size:25px;font-variant-numeric:tabular-nums}.arena{position:relative}.board{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;border:7px solid #b56d42;border-radius:22px;padding:8px;background:repeating-linear-gradient(-30deg,#fff0 0 13px,#fff2 13px 15px),#efaa61;box-shadow:0 5px #653e38}.hole{height:clamp(68px,15svh,112px);position:relative;overflow:hidden;border:0;border-radius:12px;background:#f9d08855;user-select:none;-webkit-tap-highlight-color:transparent}.rim{position:absolute;inset:auto 8% 6%;height:34%;background:#402637;border:5px solid #b36a47;border-radius:50%;box-shadow:inset 0 5px #2b1e31}.ready .rim{border-color:#fff476;box-shadow:0 0 15px #fff7b1}.ham{position:absolute;bottom:14%;left:50%;width:clamp(53px,20vw,82px);height:70%;transform:translate(-50%,120%);transition:transform .11s;pointer-events:none}.up .ham,.hit .ham{transform:translate(-50%)}.gag{position:absolute;inset:4% 1% auto;color:#fff8ca;text-shadow:0 2px #702d43,1px 0 #702d43,-1px 0 #702d43;pointer-events:none}.hit .ham{animation:whap .48s both}.hit .gag{animation:gag .55s both}
 @keyframes whap{24%{transform:translate(-50%,4%) scale(1.16,.75) rotate(-12deg)}60%{transform:translate(-50%,-3%) rotate(9deg)}to{transform:translate(-50%,120%)}}@keyframes spin{55%{transform:translate(-50%,-5%) rotate(270deg)}to{transform:translate(-50%,120%) rotate(360deg)}}@keyframes gag{25%{transform:scale(1.14) rotate(-6deg)}to{opacity:0}}@keyframes shake {
